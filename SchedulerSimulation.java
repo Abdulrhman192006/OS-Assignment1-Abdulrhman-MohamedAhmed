@@ -1,6 +1,8 @@
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 
@@ -30,6 +32,11 @@ class Process implements Runnable {
     private int timeQuantum; // Time slice (time quantum) allowed per CPU access (in milliseconds)
     private int remainingTime; // Time left for the process to finish its execution
     private int prority;
+
+    //Time Tracking Fields
+    private long creationTime;
+    private long lastEnqueuedTime;
+    private long totalWaitingTime;
     
     // Constructor to initialize the process with name, burst time, and time quantum
     public Process(String name, int burstTime, int timeQuantum, int priority) {
@@ -37,6 +44,9 @@ class Process implements Runnable {
         this.burstTime = burstTime;
         this.timeQuantum = timeQuantum;
         this.remainingTime = burstTime; // Initially, remaining time is equal to the burst time
+        this.creationTime = System.currentTimeMillis();
+        this.lastEnqueuedTime = 0;
+        this.totalWaitingTime = 0;
         this.prority = priority;
 
     }
@@ -44,9 +54,31 @@ class Process implements Runnable {
     public int getPriority() {
         return prority;
     }
+
+
+    //Helper Methods For Time Tracking
+    public void markStartedExecution() {
+        long now = System.currentTimeMillis();
+        this.totalWaitingTime += (now - lastEnqueuedTime);
+    }
+
+    public void markReEnqueued() {
+        this.lastEnqueuedTime = System.currentTimeMillis();
+    }
+
+    public long getWaitingTime() {
+        return totalWaitingTime;
+    }
+
+    public long getTurnaroundTime() {
+        return totalWaitingTime + burstTime;
+    }
+
     // This method will be called when the thread for this process is started
     @Override
     public void run() {
+
+        markStartedExecution(); // Mark the start of execution for time tracking
         // Simulate running for either the time quantum or remaining time, whichever is smaller
         int runTime = Math.min(timeQuantum, remainingTime); // Run for the smaller of the two times
         
@@ -115,6 +147,8 @@ class Process implements Runnable {
 
     // Method to run the last process to completion, ignoring the time quantum
     public void runToCompletion() {
+
+        markStartedExecution(); // Mark the start of execution for time tracking
         try {
             // Run for the remaining time without splitting into smaller time slices
             System.out.println(Colors.BRIGHT_CYAN + "  ⚡ " + Colors.BOLD + Colors.CYAN + name + 
@@ -158,7 +192,8 @@ public class SchedulerSimulation {
         int studentID = 446052690;  // ← CHANGE THIS TO YOUR ACTUAL STUDENT ID
         
         Random random = new Random(studentID);
-        
+
+
         // Define the time quantum in milliseconds (the maximum time a process gets in one round)
         // Choose a random number between 2000 and 5000 ms with a step of 1000 ms
         int timeQuantum = 2000 + random.nextInt(4) * 1000; // Random: 2000, 3000, 4000, or 5000
@@ -274,9 +309,39 @@ public class SchedulerSimulation {
                                       Colors.RESET);
                     process.runToCompletion(); // Run until the process completes
                 }
+
+
+
             }
         }
-        
+     
+     List<Process> allProcesses = new ArrayList<>();
+
+     // list to keep track of all processes
+     for (int i = 1; i <= numProcesses; i++) {
+    int burstTime = timeQuantum/2 + random.nextInt(2 * timeQuantum + 1);
+    int priority = random.nextInt(10) + 1;
+    Process process = new Process("P" + i, burstTime, timeQuantum, priority);
+    
+    allProcesses.add(process); // <--- SAVE TO LIST
+    addProcessToQueue(process, processQueue, processMap);
+
+
+    // Print Summary Table at end of main()
+        System.out.println(Colors.BOLD + Colors.CYAN + "┌" + "─".repeat(60) + "┐" + Colors.RESET);
+        System.out.println(Colors.BOLD + Colors.CYAN + "│                     PROCESS METRICS SUMMARY                        │" + Colors.RESET);
+        System.out.println(Colors.BOLD + Colors.CYAN + "├──────────────┬────────────┬──────────────┬─────────────────────────┤" + Colors.RESET);
+        System.out.printf(Colors.BOLD + Colors.YELLOW + "│ %-12s │ %-10s │ %-12s │ %-23s │\n" + Colors.RESET,
+                          "Process Name", "Burst (ms)", "Wait (ms)", "Turnaround Time (ms)");
+        System.out.println(Colors.BOLD + Colors.CYAN + "├──────────────┼────────────┼──────────────┼─────────────────────────┤" + Colors.RESET);
+
+        for (Process p : allProcesses) {
+            System.out.printf("│ %-12s │ %-10d │ %-12d │ %-23d │\n",
+                              p.getName(), p.getBurstTime(), p.getWaitingTime(), p.getTurnaroundTime());
+        }
+        System.out.println(Colors.BOLD + Colors.CYAN + "└──────────────┴────────────┴──────────────┴─────────────────────────┘" + Colors.RESET + "\n");
+}
+
         // End of the scheduler simulation
         System.out.println(Colors.BOLD + Colors.BRIGHT_GREEN + 
                           "╔════════════════════════════════════════════════════════════════════════════════╗" + 
@@ -297,6 +362,10 @@ public class SchedulerSimulation {
     // Method to add a process to the queue and map, while printing a "ready" message
     public static void addProcessToQueue(Process process, Queue<Thread> processQueue, 
                                         Map<Thread, Process> processMap) {
+
+
+         process.markReEnqueued(); // Mark the time when the process is added to the ready queue for time tracking
+
         // Create a new thread to run the process
         Thread thread = new Thread(process);
         
